@@ -51,15 +51,21 @@ class EastMoneyDataSource:
     
     @staticmethod
     def _get_secid(stock_code: str) -> str:
-        """判断市场并生成secid（支持A股、ETF、LOF）"""
+        """判断市场并生成secid（支持A股、ETF、指数）"""
         code = stock_code.strip().lower()
-        if code.startswith("sh") or code.startswith("sz"):
-            market = "1" if code.startswith("sh") else "0"
-            return f"{market}.{stock_code[2:]}"
-        if stock_code.startswith(("6", "5", "9")):
-            return f"1.{stock_code}"
-        else:
+        # 指数代码：sh=上证（沪市=1）、sz/cy=深证（深市=0）
+        if len(code) > 2 and not code[0].isdigit():
+            prefix = code[:2]
+            number = code[2:] if code[2:].isdigit() else None
+            if number:
+                market = "1" if prefix == "sh" else "0"
+                return f"{market}.{number}"
+        # 普通股票代码：6/5/9 开头 = 沪市，其余 = 深市
+        if stock_code[:1].isdigit():
+            if stock_code.startswith(("6", "5", "9")):
+                return f"1.{stock_code}"
             return f"0.{stock_code}"
+        return f"0.{stock_code}"
     
     @staticmethod
     def _safe_div(value, divisor: int):

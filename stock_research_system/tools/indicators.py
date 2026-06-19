@@ -149,18 +149,19 @@ def calculate_boll(closes: List[float], period: int = 20,
     返回: 上轨, 中轨, 下轨
     """
     if len(closes) < period:
-        return {"upper": [np.nan] * len(closes),
-                "middle": [np.nan] * len(closes),
-                "lower": [np.nan] * len(closes)}
-    
+        n = len(closes)
+        return {"upper": [float("nan")] * n,
+                "middle": [float("nan")] * n,
+                "lower": [float("nan")] * n}
+
     df = pd.Series(closes)
-    middle = df.rolling(window=period).mean()
-    std = df.rolling(window=period).std()
-    
-    upper = (middle + std_dev * std).tolist()
-    middle = middle.tolist()
-    lower = (middle - std_dev * std).tolist()
-    
+    middle_series = df.rolling(window=period).mean()
+    std_series = df.rolling(window=period).std()
+
+    upper = (middle_series + std_dev * std_series).tolist()
+    middle = middle_series.tolist()
+    lower = (middle_series - std_dev * std_series).tolist()
+
     return {"upper": upper, "middle": middle, "lower": lower}
 
 
@@ -209,18 +210,22 @@ class TechnicalAnalyzer:
         """获取基本信息"""
         if not self.data:
             return {}
-        
+
         latest = self.data[-1]
         prev_close = self.data[-2]["close"] if len(self.data) > 1 else latest["close"]
-        
+
+        change_percent = 0.0
+        if prev_close and prev_close != 0:
+            change_percent = (latest["close"] - prev_close) / prev_close * 100
+
         return {
             "latest_price": latest["close"],
             "change": latest["close"] - prev_close,
-            "change_percent": ((latest["close"] - prev_close) / prev_close * 100) if prev_close else 0,
-            "latest_date": latest["date"],
-            "period_high": max(self.highs[-60:]) if len(self.highs) >= 60 else max(self.highs),
-            "period_low": min(self.lows[-60:]) if len(self.lows) >= 60 else min(self.lows),
-            "avg_volume_20": np.mean(self.volumes[-20:]) if len(self.volumes) >= 20 else np.mean(self.volumes),
+            "change_percent": change_percent,
+            "latest_date": latest.get("date"),
+            "period_high": max(self.highs[-60:]) if len(self.highs) >= 60 else max(self.highs) if self.highs else 0,
+            "period_low": min(self.lows[-60:]) if len(self.lows) >= 60 else min(self.lows) if self.lows else 0,
+            "avg_volume_20": float(np.mean(self.volumes[-20:])) if len(self.volumes) >= 20 else (float(np.mean(self.volumes)) if self.volumes else 0),
         }
     
     def _analyze_trend(self) -> Dict:
@@ -263,16 +268,24 @@ class TechnicalAnalyzer:
         kdj = calculate_kdj(self.highs, self.lows, self.closes)
         rsi6 = calculate_rsi(self.closes, 6)
         rsi12 = calculate_rsi(self.closes, 12)
+        rsi14 = calculate_rsi(self.closes, 14)
         rsi24 = calculate_rsi(self.closes, 24)
         boll = calculate_boll(self.closes)
-        
+
         # 最新值
         def get_latest(values):
             if values and len(values) > 0:
                 val = values[-1]
-                return round(val, 4) if val and not np.isnan(val) else None
+                if val is None:
+                    return None
+                try:
+                    if np.isnan(val):
+                        return None
+                except TypeError:
+                    return None
+                return round(float(val), 4)
             return None
-        
+
         return {
             "macd": {
                 "dif": get_latest(macd["dif"]),
@@ -287,6 +300,7 @@ class TechnicalAnalyzer:
             "rsi": {
                 "rsi6": get_latest(rsi6),
                 "rsi12": get_latest(rsi12),
+                "rsi14": get_latest(rsi14),
                 "rsi24": get_latest(rsi24),
             },
             "boll": {
@@ -299,100 +313,113 @@ class TechnicalAnalyzer:
     def _generate_signals(self) -> Dict:
         """生成买卖点信号"""
         signals = {"buy": [], "sell": [], "neutral": []}
-        
+
+        def _is_num(v):
+            if v is None:
+                return False
+            try:
+                return not np.isnan(v)
+            except (TypeError, ValueError):
+                return False
+
         # 均线信号
         ma5 = calculate_ma(self.closes, 5)
         ma10 = calculate_ma(self.closes, 10)
         ma20 = calculate_ma(self.closes, 20)
-        
+
         if len(ma5) >= 2 and len(ma10) >= 2:
-            # 金叉（MA5上穿MA10）
-            if ma5[-2] < ma10[-2] and ma5[-1] > ma10[-1]:
-                signals["buy"].append({
-                    "type": "MA金叉",
-                    "description": f"MA5({ma5[-1]:.2f})上穿MA10({ma10[-1]:.2f})，短期看涨信号",
-                    "confidence": "中"
-                })
-            
-            # 死叉（MA5下穿MA10）
-            if ma5[-2] > ma10[-2] and ma5[-1] < ma10[-1]:
-                signals["sell"].append({
-                    "type": "MA死叉",
-                    "description": f"MA5({ma5[-1]:.2f})下穿MA10({ma10[-1]:.2f})，短期看跌信号",
-                    "confidence": "中"
-                })
-        
+            v5_1, v5_0 = ma5[-2], ma5[-1]
+            v10_1, v10_0 = ma10[-2], ma10[-1]
+            if all(_is_num(v) for v in (v5_1, v5_0, v10_1, v10_0)):
+                # 金叉（MA5上穿MA10）
+                if v5_1 < v10_1 and v5_0 > v10_0:
+                    signals["buy"].append({
+                        "type": "MA金叉",
+                        "description": f"MA5({v5_0:.2f})上穿MA10({v10_0:.2f})，短期看涨信号",
+                        "confidence": "中"
+                    })
+                # 死叉（MA5下穿MA10）
+                if v5_1 > v10_1 and v5_0 < v10_0:
+                    signals["sell"].append({
+                        "type": "MA死叉",
+                        "description": f"MA5({v5_0:.2f})下穿MA10({v10_0:.2f})，短期看跌信号",
+                        "confidence": "中"
+                    })
+
         # MACD信号
         macd = calculate_macd(self.closes)
-        if len(macd["histogram"]) >= 2:
+        hist = macd.get("histogram", [])
+        if len(hist) >= 2 and _is_num(hist[-2]) and _is_num(hist[-1]):
             # MACD金叉
-            if macd["histogram"][-2] < 0 and macd["histogram"][-1] > 0:
+            if hist[-2] < 0 and hist[-1] > 0:
                 signals["buy"].append({
                     "type": "MACD金叉",
                     "description": "MACD柱由负转正，快线金叉慢线，看涨信号",
                     "confidence": "高"
                 })
             # MACD死叉
-            elif macd["histogram"][-2] > 0 and macd["histogram"][-1] < 0:
+            elif hist[-2] > 0 and hist[-1] < 0:
                 signals["sell"].append({
                     "type": "MACD死叉",
                     "description": "MACD柱由正转负，快线死叉慢线，看跌信号",
                     "confidence": "高"
                 })
-        
+
         # RSI信号
         rsi14 = calculate_rsi(self.closes, 14)
-        if rsi14 and len(rsi14) > 0:
+        if rsi14 and len(rsi14) > 0 and _is_num(rsi14[-1]):
             rsi_val = rsi14[-1]
-            if rsi_val and not np.isnan(rsi_val):
-                if rsi_val < 30:
-                    signals["buy"].append({
-                        "type": "RSI超卖",
-                        "description": f"RSI14={rsi_val:.1f}，处于超卖区域，可能反弹",
-                        "confidence": "中"
-                    })
-                elif rsi_val > 70:
-                    signals["sell"].append({
-                        "type": "RSI超买",
-                        "description": f"RSI14={rsi_val:.1f}，处于超买区域，注意风险",
-                        "confidence": "中"
-                    })
-        
+            if rsi_val < 30:
+                signals["buy"].append({
+                    "type": "RSI超卖",
+                    "description": f"RSI14={rsi_val:.1f}，处于超卖区域，可能反弹",
+                    "confidence": "中"
+                })
+            elif rsi_val > 70:
+                signals["sell"].append({
+                    "type": "RSI超买",
+                    "description": f"RSI14={rsi_val:.1f}，处于超买区域，注意风险",
+                    "confidence": "中"
+                })
+
         # 布林带信号
         boll = calculate_boll(self.closes)
-        if len(boll["lower"]) > 0:
-            current_price = self.closes[-1]
-            if boll["lower"][-1] and not np.isnan(boll["lower"][-1]):
-                if current_price < boll["lower"][-1]:
-                    signals["buy"].append({
-                        "type": "布林下轨支撑",
-                        "description": "价格触及布林下轨，可能获得支撑",
-                        "confidence": "中"
-                    })
-            if boll["upper"][-1] and not np.isnan(boll["upper"][-1]):
-                if current_price > boll["upper"][-1]:
-                    signals["sell"].append({
-                        "type": "布林上轨压力",
-                        "description": "价格触及布林上轨，面临压力",
-                        "confidence": "中"
-                    })
-        
+        current_price = self.closes[-1]
+        if len(boll.get("lower", [])) > 0 and _is_num(boll["lower"][-1]):
+            if current_price < boll["lower"][-1]:
+                signals["buy"].append({
+                    "type": "布林下轨支撑",
+                    "description": "价格触及布林下轨，可能获得支撑",
+                    "confidence": "中"
+                })
+        if len(boll.get("upper", [])) > 0 and _is_num(boll["upper"][-1]):
+            if current_price > boll["upper"][-1]:
+                signals["sell"].append({
+                    "type": "布林上轨压力",
+                    "description": "价格触及布林上轨，面临压力",
+                    "confidence": "中"
+                })
+
         # KDJ信号
         kdj = calculate_kdj(self.highs, self.lows, self.closes)
-        if len(kdj["k"]) >= 2 and len(kdj["d"]) >= 2:
-            if kdj["k"][-2] < kdj["d"][-2] and kdj["k"][-1] > kdj["d"][-1]:
-                signals["buy"].append({
-                    "type": "KDJ金叉",
-                    "description": f"K({kdj['k'][-1]:.1f})上穿D({kdj['d'][-1]:.1f})",
-                    "confidence": "中"
-                })
-            elif kdj["k"][-2] > kdj["d"][-2] and kdj["k"][-1] < kdj["d"][-1]:
-                signals["sell"].append({
-                    "type": "KDJ死叉",
-                    "description": f"K({kdj['k'][-1]:.1f})下穿D({kdj['d'][-1]:.1f})",
-                    "confidence": "中"
-                })
-        
+        k = kdj.get("k", [])
+        d = kdj.get("d", [])
+        if len(k) >= 2 and len(d) >= 2:
+            v = [k[-2], k[-1], d[-2], d[-1]]
+            if all(_is_num(x) for x in v):
+                if v[0] < v[2] and v[1] > v[3]:
+                    signals["buy"].append({
+                        "type": "KDJ金叉",
+                        "description": f"K({v[1]:.1f})上穿D({v[3]:.1f})",
+                        "confidence": "中"
+                    })
+                elif v[0] > v[2] and v[1] < v[3]:
+                    signals["sell"].append({
+                        "type": "KDJ死叉",
+                        "description": f"K({v[1]:.1f})下穿D({v[3]:.1f})",
+                        "confidence": "中"
+                    })
+
         # 如果没有信号
         if not signals["buy"] and not signals["sell"]:
             signals["neutral"].append({
@@ -400,7 +427,7 @@ class TechnicalAnalyzer:
                 "description": "当前技术指标暂无明确买卖信号，建议观望",
                 "confidence": "-"
             })
-        
+
         return signals
     
     def _generate_summary(self, analysis: Dict) -> Dict:

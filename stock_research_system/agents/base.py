@@ -5,14 +5,37 @@ Agent基类
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
+from typing import Dict, List, Any, Optional, Tuple
 import logging
 import json
+import os
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# 延迟导入 langchain 相关模块，避免没有安装时整体不可用
+try:
+    from langchain_openai import ChatOpenAI  # noqa: F401
+    from langchain_core.messages import HumanMessage, SystemMessage  # noqa: F401
+    _LANGCHAIN_AVAILABLE = True
+except ImportError:
+    ChatOpenAI = None
+    HumanMessage = None
+    SystemMessage = None
+    _LANGCHAIN_AVAILABLE = False
+    logger.warning("langchain_openai / langchain_core 未安装，LLM 功能将不可用")
+
+
+def _load_dotenv_if_available():
+    """尝试加载 .env 中的 API key，兼容未安装 python-dotenv 的情况"""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
+
+_load_dotenv_if_available()
 
 
 class BaseAgent(ABC):
@@ -29,16 +52,29 @@ class BaseAgent(ABC):
         
     def initialize_llm(self):
         """初始化LLM（延迟加载）"""
-        if self.llm is None:
-            try:
-                self.llm = ChatOpenAI(
-                    model=self.model_name,
-                    temperature=self.temperature,
-                    api_key="your-api-key"  # 用户需要替换为实际API Key
-                )
-            except Exception as e:
-                logger.error(f"初始化LLM失败: {e}")
-                raise
+        if self.llm is not None:
+            return
+
+        if not _LANGCHAIN_AVAILABLE:
+            logger.warning("LLM 不可用，请先安装 langchain-openai 并配置 OPENAI_API_KEY")
+            self.llm = "disabled"
+            return
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key or api_key in ("your-openai-api-key-here", "your-api-key", ""):
+            logger.info("未检测到有效 OPENAI_API_KEY，LLM 调用将返回本地解释")
+            self.llm = "no-key"
+            return
+
+        try:
+            self.llm = ChatOpenAI(
+                model=self.model_name,
+                temperature=self.temperature,
+                api_key=api_key,
+            )
+        except Exception as e:
+            logger.error(f"初始化LLM失败: {e}")
+            self.llm = "error"
     
     @abstractmethod
     def process(self, input_data: Any) -> Dict:
@@ -49,21 +85,30 @@ class BaseAgent(ABC):
         pass
     
     def call_llm(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        """调用LLM"""
-        if self.llm is None:
-            self.initialize_llm()
-        
+        """调用LLM；当未安装 langchain 或没有 API key 时返回本地解释摘要"""
+        self.initialize_llm()
+
+        # LLM 不可用时，生成一段简单的本地说明，避免整体流程阻塞
+        if isinstance(self.llm, str):
+            hint = {
+                "disabled": "（LLM 功能未启用：请安装 langchain-openai 后重试）",
+                "no-key": "（LLM 功能未启用：请在环境变量或 .env 中配置 OPENAI_API_KEY 后重试）",
+                "error": "（LLM 初始化失败，已回退为本地解释）",
+            }.get(self.llm, "（LLM 暂不可用）")
+            snippet = prompt.strip().replace("\n", " ")[:80]
+            return f"{hint}\n本地摘要：{snippet}..."
+
         messages = []
         if system_prompt:
             messages.append(SystemMessage(content=system_prompt))
         messages.append(HumanMessage(content=prompt))
-        
+
         try:
             response = self.llm.invoke(messages)
             return response.content
         except Exception as e:
             logger.error(f"LLM调用失败: {e}")
-            return f"错误: {str(e)}"
+            return f"（LLM 调用出错：{e}）"
     
     def save_context(self, role: str, content: str):
         """保存对话上下文"""

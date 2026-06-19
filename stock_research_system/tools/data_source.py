@@ -58,21 +58,31 @@ class EastMoneyDataSource:
             return f"0.{stock_code}"
     
     @staticmethod
+    def _safe_div(value, divisor: int):
+        """安全除法：值为 None 时返回 0"""
+        if value is None:
+            return 0
+        try:
+            return value / divisor
+        except (TypeError, ZeroDivisionError):
+            return 0
+
+    @staticmethod
     def _parse_realtime(data: Dict) -> Dict:
         """解析实时行情数据"""
         return {
             "stock_code": data.get("f57"),
             "stock_name": data.get("f58"),
-            "current_price": data.get("f43", 0) / 100,  # 价格，单位：元
-            "change_percent": data.get("f170", 0) / 100,  # 涨跌幅，%
-            "change_amount": data.get("f169", 0) / 100,   # 涨跌额
-            "volume": data.get("f47", 0),                  # 成交量
-            "amount": data.get("f48", 0),                  # 成交额
-            "high": data.get("f44", 0) / 100,
-            "low": data.get("f45", 0) / 100,
-            "open": data.get("f46", 0) / 100,
-            "prev_close": data.get("f60", 0) / 100,
-            "datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            "current_price": EastMoneyDataSource._safe_div(data.get("f43"), 100),
+            "change_percent": EastMoneyDataSource._safe_div(data.get("f170"), 100),
+            "change_amount": EastMoneyDataSource._safe_div(data.get("f169"), 100),
+            "volume": data.get("f47", 0) or 0,
+            "amount": data.get("f48", 0) or 0,
+            "high": EastMoneyDataSource._safe_div(data.get("f44"), 100),
+            "low": EastMoneyDataSource._safe_div(data.get("f45"), 100),
+            "open": EastMoneyDataSource._safe_div(data.get("f46"), 100),
+            "prev_close": EastMoneyDataSource._safe_div(data.get("f60"), 100),
+            "datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
     
     @staticmethod

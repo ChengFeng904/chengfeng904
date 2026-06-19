@@ -24,6 +24,21 @@ from tools.indicators import (
     analyze_stock,
 )
 
+# 可视化模块（可选依赖：matplotlib）
+try:
+    from tools.chart import (
+        plot_kline_with_indicators,
+        plot_market_indices,
+        is_matplotlib_available,
+    )
+
+    _CHART_AVAILABLE = True
+except ImportError:
+    plot_kline_with_indicators = None
+    plot_market_indices = None
+    is_matplotlib_available = lambda: False
+    _CHART_AVAILABLE = False
+
 __all__ = [
     # 数据源
     "EastMoneyDataSource",
@@ -33,7 +48,6 @@ __all__ = [
     "get_batch_quotes",
     "get_market_index",
     "get_limit_up",
-    
     # 技术指标
     "calculate_ma",
     "calculate_ema",
@@ -43,4 +57,8 @@ __all__ = [
     "calculate_boll",
     "TechnicalAnalyzer",
     "analyze_stock",
+    # 可视化
+    "plot_kline_with_indicators",
+    "plot_market_indices",
+    "is_matplotlib_available",
 ]

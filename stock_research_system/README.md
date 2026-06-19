@@ -10,6 +10,7 @@
 - **大盘监控Agent**: 市场情绪、板块轮动、涨停板统计
 - **自动盯盘Agent**: 持仓股、自选股实时监控，异常告警
 - **报告生成Agent**: 自动生成每日投资研究报告
+- **Web 界面**: Streamlit 可视化界面，操作简便
 
 ## 快速开始
 
@@ -17,26 +18,38 @@
 
 ```bash
 cd stock_research_system
+
+# 核心依赖（必装）
 pip install -r requirements.txt
+
+# 或者安装全量依赖
+pip install pandas numpy requests langchain langchain-openai openai python-dotenv streamlit matplotlib
 ```
 
-### 2. 配置API Key
+### 2. 配置 API Key
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入您的 OpenAI API Key
+# 编辑 .env，填入您的 OpenAI API Key（可选）
 ```
 
-### 3. 运行系统
+### 3. 运行系统 - 推荐方式（Web 界面）
 
 ```bash
-# 交互模式（推荐新手）
+# 方式一：启动 Web 界面（推荐）
+streamlit run app.py
+```
+
+浏览器会自动打开 http://localhost:8501
+
+```bash
+# 方式二：交互式命令行（适合纯文本）
 python main.py
 
-# 仅生成报告
+# 方式三：仅生成报告
 python main.py --mode report
 
-# 盯盘模式
+# 方式四：盯盘模式（命令行）
 python main.py --mode watch
 ```
 
@@ -68,14 +81,13 @@ WATCH_LIST = [
 
 # 持仓列表
 PORTFOLIO = [
-    ("000001", "平安银行", 1000, 12.50),  # 代码, 名称, 数量, 成本价
+    ("000001", "平安银行", 1000, 12.50),
 ]
 
 # 告警阈值
 ALERT_THRESHOLDS = {
-    "price_change_percent": 5,   # 价格变动超过5%告警
-    "price_drop_stop_loss": -7,  # 亏损7%止损提醒
-    ...
+    "price_change_percent": 5,      # 价格变动超过5%告警
+    "price_drop_stop_loss": -7,     # 亏损7%止损提醒
 }
 ```
 
@@ -83,20 +95,24 @@ ALERT_THRESHOLDS = {
 
 ```
 stock_research_system/
-├── config/          # 配置文件
+├── config/              # 配置模块
 │   └── settings.py
-├── agents/          # Agent模块
-│   ├── base.py      # Agent基类
-│   ├── monitor.py   # 监控Agent
-│   └── report.py    # 报告Agent
-├── tools/           # 工具函数
-│   ├── data_source.py   # 数据源
-│   └── indicators.py    # 技术指标
-├── core/            # 核心模块
-│   └── orchestrator.py  # Agent编排器
-├── data/            # 数据目录
-├── reports/         # 报告目录
-└── main.py          # 主程序入口
+├── agents/              # Agent 模块
+│   ├── base.py       # Agent 基类
+│   ├── monitor.py    # 监控 Agent
+│   └── report.py     # 报告 Agent
+├── tools/               # 工具模块
+│   ├── data_source.py # 数据源
+│   ├── indicators.py   # 技术指标
+│   └── chart.py        # 图表可视化
+├── core/                # 核心编排
+│   └── orchestrator.py # Agent 编排器
+├── data/                # 数据目录
+├── reports/             # 报告目录
+├── main.py             # 命令行主程序
+├── app.py              # Streamlit Web 界面
+├── pyproject.toml     # 项目配置
+└── requirements.txt   # 依赖列表
 ```
 
 ## 免责声明

@@ -51,8 +51,12 @@ class EastMoneyDataSource:
     
     @staticmethod
     def _get_secid(stock_code: str) -> str:
-        """判断市场并生成secid"""
-        if stock_code.startswith("6"):
+        """判断市场并生成secid（支持A股、ETF、LOF）"""
+        code = stock_code.strip().lower()
+        if code.startswith("sh") or code.startswith("sz"):
+            market = "1" if code.startswith("sh") else "0"
+            return f"{market}.{stock_code[2:]}"
+        if stock_code.startswith(("6", "5", "9")):
             return f"1.{stock_code}"
         else:
             return f"0.{stock_code}"

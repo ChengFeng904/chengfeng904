@@ -1,0 +1,50 @@
+# 股票研究系统 - 使用说明
+
+## 系统要求
+- Python 3.9 或更高版本
+- OpenAI API Key
+
+## 快速开始
+
+### 第一步：配置API Key
+1. 用记事本（或文本编辑器）打开 `.env` 文件
+2. 找到这一行：
+   ```
+   OPENAI_API_KEY=sk-your-api-key-here
+   ```
+3. 把 `sk-your-api-key-here` 改成你的真实API Key，例如：
+   ```
+   OPENAI_API_KEY=sk-xxxxxxxxxxxxxx
+   ```
+4. 保存文件
+
+### 第二步：安装依赖（首次使用）
+双击运行 `安装依赖.bat`（Windows）或 `安装依赖.sh`（Mac/Linux）
+
+### 第三步：启动系统
+双击运行 `启动系统.bat`（Windows）或 `启动系统.sh`（Mac/Linux）
+
+### 第四步：打开浏览器
+系统启动后会自动打开浏览器，访问 http://localhost:8501
+
+## 常见问题
+
+### Q: 提示"未检测到Python"
+A: 请先从 https://www.python.org/downloads/ 下载并安装Python，安装时记得勾选"Add Python to PATH"
+
+### Q: 提示"依赖安装失败"
+A: 可以尝试手动在命令行运行：`pip install -r requirements.txt`
+
+### Q: 浏览器打不开
+A: 手动打开浏览器，输入 http://localhost:8501
+
+### Q: 如何获取API Key？
+A: 访问 https://platform.openai.com/api-keys 注册账号后创建API Key
+
+## 停止系统
+在运行窗口按 `Ctrl + C` 即可停止系统
+
+## 注意事项
+- 系统需要联网才能获取股票数据
+- API Key会消耗OpenAI额度，建议设置用量限制
+- 股票数据仅供参考，不构成投资建议
